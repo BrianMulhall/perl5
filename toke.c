@@ -3392,14 +3392,20 @@ S_scan_const(pTHX_ char *start)
             /* skip for regexp comments /(?#comment)/, except for the last
              * char, which will be done separately.  Stop on (?{..}) and
              * friends */
-	else if (*s == '(' && PL_lex_inpat && s[1] == '?' && !in_charclass) {
-	    if (s[2] == '#') {
+	else if (     *s == '('
+                 &&   PL_lex_inpat
+                 &&   s + 1 < send
+                 &&   s[1] == '?'
+                 && ! in_charclass)
+        {
+	    if (s + 2 < send && s[2] == '#') {
 		while (s+1 < send && *s != ')')
 		    *d++ = *s++;
 	    }
-	    else if (!PL_lex_casemods
+	    else if ( !  PL_lex_casemods
+                     &&  s + 2 < send
                      && (    s[2] == '{' /* This should match regcomp.c */
-		         || (s[2] == '?' && s[3] == '{')))
+		         || (s[2] == '?' && s + 3 < send && s[3] == '{')))
 	    {
 		break;
 	    }
@@ -3420,7 +3426,7 @@ S_scan_const(pTHX_ char *start)
             /* check for embedded arrays
              * (@foo, @::foo, @'foo, @{foo}, @$foo, @+, @-)
              */
-	else if (*s == '@' && s[1]) {
+	else if (*s == '@' && s + 1 < send && s[1]) {
 	    if (UTF
                ? isIDFIRST_utf8_safe(s+1, send)
                : isWORDCHAR_A(s[1]))
@@ -3517,7 +3523,7 @@ S_scan_const(pTHX_ char *start)
 	    case '4': case '5': case '6': case '7':
 		{
                     I32 flags = PERL_SCAN_SILENT_ILLDIGIT;
-                    STRLEN len = 3;
+                    STRLEN len = MIN(send - s, 3);
 		    uv = grok_oct(s, &len, &flags, NULL);
 		    s += len;
                     if (len < 3 && s < send && isDIGIT(*s)
@@ -3681,7 +3687,7 @@ S_scan_const(pTHX_ char *start)
                  * non-pattern \N must mean 'named character', which requires
                  * braces */
 		s++;
-		if (*s != '{') {
+		if (s >= send || *s != '{') {
 		    yyerror("Missing braces on \\N{}");
                     *d++ = '\0';
 		    continue;
@@ -4040,7 +4046,7 @@ S_scan_const(pTHX_ char *start)
             utf8_variant_count++;
         }
         else if (this_utf8 && has_utf8) {   /* Both UTF-8, can just copy */
-	    const STRLEN len = UTF8SKIP(s);
+	    const STRLEN len = UTF8_SAFE_SKIP(s, send);
 
             /* We expect the source to have already been checked for
              * malformedness */
